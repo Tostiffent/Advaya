@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LiveKit with LlamaIndex & Groq</title>
+    <!-- Note: The UMD build exposes the global as "LivekitClient" -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.9/dist/livekit-client.umd.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f7;
+        color: #333;
+      }
+      .container {
+        background-color: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        margin-bottom: 30px;
+      }
+      button {
+        background-color: #4a4af4;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.2s;
+      }
+      button:hover {
+        background-color: #3a3ad4;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      .status {
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #666;
+      }
+      .conversation {
+        margin-top: 20px;
+        border: 1px solid #e1e1e1;
+        border-radius: 8px;
+        height: 400px;
+        overflow-y: auto;
+        padding: 15px;
+        background-color: #fafafa;
+      }
+      .message {
+        margin-bottom: 15px;
+        padding: 10px 15px;
+        border-radius: 8px;
+        max-width: 80%;
+      }
+      .user-message {
+        background-color: #e1efff;
+        align-self: flex-end;
+        margin-left: auto;
+      }
+      .ai-message {
+        background-color: #f0f0f0;
+      }
+      .message-container {
+        display: flex;
+        flex-direction: column;
+      }
+      .textInput {
+        display: flex;
+        margin-top: 20px;
+        gap: 10px;
+      }
+      .textInput input {
+        flex-grow: 1;
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+      }
+      .controls-group {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+      }
+      .connecting {
+        color: orange;
+      }
+      .connected {
+        color: green;
+      }
+      .error {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>LiveKit with LlamaIndex & Groq</h1>
+
+      <div class="status" id="connectionStatus">Status: Not connected</div>
+
+      <div class="controls">
+        <div class="controls-group">
+          <button id="connectBtn">Connect to LiveKit</button>
+          <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+
+        <div class="controls-group">
+          <button id="startRecordingBtn" disabled>Start Voice Recording</button>
+          <button id="stopRecordingBtn" disabled>Stop Recording</button>
+        </div>
+      </div>
+
+      <div class="conversation" id="conversation">
+        <div class="message ai-message">
+          Hello! I'm your AI assistant. You can speak to me or type your
+          questions below.
+        </div>
+      </div>
+
+      <div class="textInput">
+        <input
+          type="text"
+          id="textInput"
+          placeholder="Type your question here..."
+        />
+        <button id="sendTextBtn">Send</button>
+      </div>
+    </div>
+
+    <script>
+      const connectionStatus = document.getElementById("connectionStatus");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const startRecordingBtn = document.getElementById("startRecordingBtn");
+      const stopRecordingBtn = document.getElementById("stopRecordingBtn");
+      const conversation = document.getElementById("conversation");
+      const textInput = document.getElementById("textInput");
+      const sendTextBtn = document.getElementById("sendTextBtn");
+
+      let room = null;
+      let localAudioTrack = null;
+      let ws = null;
+      let isRecording = false;
+
+      // Connect to LiveKit server
+      connectBtn.addEventListener("click", async () => {
+        try {
+          connectionStatus.textContent = "Status: Connecting...";
+          connectionStatus.className = "status connecting";
+
+          // Get token from your backend
+          const response = await fetch(
+            "https://urban-xylophone-jp7j7gvw7q7fq954-8000.app.github.dev/token",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ user: "user-" + Date.now() }),
+            }
+          );
+          const { token, url } = await response.json();
+
+          // Connect to LiveKit room using LivekitClient
+          room = new LivekitClient.Room();
+          await room.connect(url, token);
+
+          connectionStatus.textContent = "Status: Connected to LiveKit";
+          connectionStatus.className = "status connected";
+
+          // Enable UI controls
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          startRecordingBtn.disabled = false;
+
+          // Connect WebSocket for text communication
+          connectWebSocket();
+
+          // Now call the connect-server endpoint to have the server join the room
+          const serverResponse = await fetch(
+            "https://urban-xylophone-jp7j7gvw7q7fq954-8000.app.github.dev/connect-server",
+            {
+              method: "POST",
+            }
+          );
+          const serverData = await serverResponse.json();
+          console.log("Server connection response:", serverData);
+        } catch (error) {
+          console.error("Connection error:", error);
+          connectionStatus.textContent = `Status: Connection error - ${error.message}`;
+          connectionStatus.className = "status error";
+        }
+      });
+
+      // Disconnect from LiveKit server
+      disconnectBtn.addEventListener("click", async () => {
+        if (room) {
+          room.disconnect();
+          room = null;
+        }
+
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+
+        connectionStatus.textContent = "Status: Disconnected";
+        connectionStatus.className = "status";
+
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        startRecordingBtn.disabled = true;
+        stopRecordingBtn.disabled = true;
+      });
+
+      // Start recording
+      startRecordingBtn.addEventListener("click", async () => {
+        try {
+          if (!room) return;
+
+          // Create a local audio track using LivekitClient
+          localAudioTrack = await LivekitClient.createLocalAudioTrack();
+
+          console.log("creating local audio track", localAudioTrack);
+
+          // Publish track to room
+          await room.localParticipant.publishTrack(localAudioTrack);
+
+          console.log("published track");
+
+          addMessage("Recording started...", "user");
+
+          if (
+            localAudioTrack._mediaStreamTrack &&
+            localAudioTrack._mediaStreamTrack.getStats
+          ) {
+            localAudioTrack._mediaStreamTrack
+              .getStats()
+              .then((stats) => {
+                stats.forEach((report) => {
+                  console.log(report);
+                });
+              })
+              .catch((error) =>
+                console.error("Error getting track stats:", error)
+              );
+          } else console.log("Err");
+
+          isRecording = true;
+          startRecordingBtn.disabled = true;
+          stopRecordingBtn.disabled = false;
+        } catch (error) {
+          console.error("Recording error:", error);
+          connectionStatus.textContent = `Status: Recording error - ${error.message}`;
+          connectionStatus.className = "status error";
+        }
+      });
+
+      // Stop recording
+      stopRecordingBtn.addEventListener("click", () => {
+        if (localAudioTrack) {
+          localAudioTrack.stop();
+          room.localParticipant.unpublishTrack(localAudioTrack);
+          localAudioTrack = null;
+        }
+
+        isRecording = false;
+        startRecordingBtn.disabled = false;
+        stopRecordingBtn.disabled = true;
+
+        addMessage("Recording stopped", "user");
+      });
+
+      // Send text message
+      sendTextBtn.addEventListener("click", () => {
+        sendTextMessage();
+      });
+
+      textInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendTextMessage();
+        }
+      });
+
+      function sendTextMessage() {
+        const text = textInput.value.trim();
+        if (text && ws) {
+          ws.send(
+            JSON.stringify({
+              type: "query",
+              text: text,
+            })
+          );
+
+          addMessage(text, "user");
+          textInput.value = "";
+        }
+      }
+
+      function connectWebSocket() {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        // Build the WebSocket URL dynamically using the correct protocol.
+        ws = new WebSocket(
+          `${protocol}://urban-xylophone-jp7j7gvw7q7fq954-8000.app.github.dev/ws`
+        );
+
+        ws.onopen = () => {
+          console.log("WebSocket connected");
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "response") {
+            addMessage(data.text, "ai");
+
+            // Play audio if available
+            if (data.audio) {
+              playAudio(data.audio);
+            }
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket disconnected");
+        };
+      }
+
+      function addMessage(text, sender) {
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("message");
+        messageDiv.classList.add(
+          sender === "user" ? "user-message" : "ai-message"
+        );
+        messageDiv.textContent = text;
+
+        conversation.appendChild(messageDiv);
+        conversation.scrollTop = conversation.scrollHeight;
+      }
+
+      function playAudio(base64Audio) {
+        const audio = new Audio();
+        audio.src = `data:audio/wav;base64,${base64Audio}`;
+        audio.play();
+      }
+    </script>
+  </body>
+</html>
