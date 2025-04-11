@@ -27,6 +27,14 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  // Add serverActions configuration here
+  serverActions: {
+    allowedOrigins: [
+      'localhost:3000',
+      'effective-memory-4pvjvr59wrw2q64w-3000.app.github.dev',
+      // You can add other domains if needed
+    ],
+  },
 }
 
 if (userConfig) {

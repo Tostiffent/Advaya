@@ -1,5 +1,16 @@
 import type { Config } from "tailwindcss"
 
+const colors = require("tailwindcss/colors");
+
+const groq = {
+  "accent-bg": "#434343",
+};
+
+const customColors = {
+  groq,
+};
+
+
 const config = {
   darkMode: ["class"],
   content: [
@@ -19,6 +30,8 @@ const config = {
     },
     extend: {
       colors: {
+        ...colors,
+        ...customColors,
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

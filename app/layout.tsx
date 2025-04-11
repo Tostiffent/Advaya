@@ -2,7 +2,17 @@
 
 import React from "react"
 import "@/app/globals.css"
+import "@livekit/components-styles";
 import { ThemeProvider } from "@/components/theme-provider"
+import { type Metadata } from 'next'
+import {
+  ClerkProvider,
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from '@clerk/nextjs'
 import { Footer } from "@/components/footer"
 import { MainNav } from "@/components/main-nav"
 import Link from "next/link"
@@ -13,25 +23,25 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <div className="flex min-h-screen flex-col bg-background">
-            <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <div className="container flex h-16 items-center">
-                <Link href="/" className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-primary">Travel Wise</span>
-                </Link>
-                <MobileNav />
-                <MainNav className="mx-6 hidden md:flex" />
-              </div>
-            </header>
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
-        </ThemeProvider>
-      </body>
-    </html>
+    <ClerkProvider><html lang="en" suppressHydrationWarning>
+    <body className="min-h-screen bg-background font-sans antialiased">
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+        <div className="flex min-h-screen flex-col bg-background">
+          <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container flex h-16 items-center">
+              <Link href="/" className="flex items-center gap-2">
+                <span className="text-xl font-bold text-primary">Travel Wise</span>
+              </Link>
+              <MobileNav />
+              <MainNav className="mx-6 hidden md:flex" />
+            </div>
+          </header>
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
+      </ThemeProvider>
+    </body>
+  </html></ClerkProvider>
   )
 }
 
